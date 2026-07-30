@@ -7,6 +7,7 @@ import config
 
 SYSTEM_PROMPT = {"role": "system", "content": config.SYSTEM_PROMPT}
 MAX_HISTORY_MESSAGES = config.MAX_HISTORY_MESSAGES
+ERROR_MARKER = "⚠️"
 
 client = AsyncOpenAI(
     base_url=config.API_ENDPOINT,
@@ -30,6 +31,8 @@ async def main(message: cl.Message):
     await msg.send()
     full_response = ""
 
+    stream_succeeded = False
+
     try:
         stream = await client.chat.completions.create(
             model=config.MODEL,
@@ -46,13 +49,10 @@ async def main(message: cl.Message):
                     full_response += delta
                     await msg.stream_token(delta)
 
-        except Exception as e:
-            logging.exception("Error while processing stream chunks")
-
-            msg.content += f"ERROR! Couldn't process response stream chunks: {e}"
-
         finally:
             await stream.close()
+
+        stream_succeeded = True
 
     except Exception as e:
         logging.exception("Error while streaming response from model")
@@ -60,17 +60,17 @@ async def main(message: cl.Message):
         if full_response:
             msg.content = (
                 full_response
-                + f"\n\nERROR! *Response cut off: something went wrong talking to the model: {e}"
+                + f"\n\n{ERROR_MARKER} ERROR! *Response cut off: something went wrong talking to the model: {e}"
             )
 
         else:
             msg.content = (
-                f"ERROR! Sorry, something went wrong talking to the model: {e}"
+                f"{ERROR_MARKER} ERROR! Sorry, something went wrong talking to the model: {e}"
             )
 
     await msg.update()
 
-    if full_response:
+    if stream_succeeded and full_response:
         message_history.append({"role": "assistant", "content": full_response})
 
         if len(message_history) > MAX_HISTORY_MESSAGES + 1:
