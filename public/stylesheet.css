@@ -1,0 +1,4 @@
+.message-content *, textarea {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
